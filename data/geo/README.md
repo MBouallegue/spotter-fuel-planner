@@ -23,6 +23,9 @@ The key is `(normalize_town(city), state)`. The rules live in `planner/services/
 
 - **Orlando, FL (manual).** The gazetteer has a second Orlando, FL row in Brevard County,
   about 48 miles away on the coast. That row is wrong; the override uses the Orange County row.
+- **San Francisco, CA (manual).** No station is in San Francisco, but a trip can start there.
+  The gazetteer has a second San Francisco row at SFO, 11 miles south in San Mateo County,
+  and averaging the two would put "San Francisco, CA" in Brisbane. The override is City Hall.
 - **Pass Lake, ON (manual).** Nominatim's structured search has no settlement for this hamlet
   on Highway 11/17, east of Thunder Bay. The row uses the coordinates of the lake it is named
   after, which lies beside the highway. They come from one free-form Nominatim search, so
