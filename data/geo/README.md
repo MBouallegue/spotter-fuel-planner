@@ -23,6 +23,10 @@ The key is `(normalize_town(city), state)`. The rules live in `planner/services/
 
 - **Orlando, FL (manual).** The gazetteer has a second Orlando, FL row in Brevard County,
   about 48 miles away on the coast. That row is wrong; the override uses the Orange County row.
+- **Pass Lake, ON (manual).** Nominatim's structured search has no settlement for this hamlet
+  on Highway 11/17, east of Thunder Bay. The row uses the coordinates of the lake it is named
+  after, which lies beside the highway. They come from one free-form Nominatim search, so
+  they are also © OpenStreetMap contributors, ODbL.
 - **6 US towns and 84 Canadian towns (Nominatim).** `python manage.py geocode_leftovers` looked
   up each town the gazetteer cannot place, once: a structured search, single-threaded, more
   than 1.1 s apart, with raw answers cached in `.nominatim_cache.json` (gitignored). Three
