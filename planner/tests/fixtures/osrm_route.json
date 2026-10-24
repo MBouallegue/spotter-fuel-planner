@@ -1,0 +1,41 @@
+{
+ "code": "Ok",
+ "routes": [
+  {
+   "legs": [
+    {
+     "steps": [],
+     "weight": 680.2,
+     "summary": "",
+     "duration": 680.2,
+     "distance": 6565.8
+    }
+   ],
+   "weight_name": "routability",
+   "geometry": "meavlAjuvblCyt@r~BcA`DwDrLeCxHcw@tbC}Kb]_BjFjCbB~AdA`ZxRl@`@zBxAdBsF|Ku]|]uiAnWkx@hB{GgBmAm^qVuBwAkBmAeWuPoH}EkDoBaD}AaXyPuFoDeBmAsBsAwP_LiMqIkBoAaBcAg_@kUiBiAaC}A{]sUsBuAoBsAo^mVeC{AaBkAu^wUuBsAwBwAoCeBwYgRsBqAuBsAuIsF{TyNiDyB_EmCk@_@}]sUyByAsBuA}^iVqBqA}ByAw^_VsBsAyByAs]uUgCcB_C}Ay^eViBkA_C{AsGiE_VuOuBuA{ByA}^gVoBqAoNiJcSwMeC_B{GmEyA_AeV{OoBqAaC}A}B{AgZyR}@k@iAu@iBmAcMiI}P_LeBiAgCcBe^uUsBsAcCaBeXiQwE{CcC_BeBkAw^kVaBgAiCeB__@qVyDiCkEsCo_@mVsBsAyBwAeMiIuP}KqEyAmBdGg@zA{FtQw@fCgGjRkM`a@sa@ppAeB~FaBdFyIrXw@bCq\\zdAiLtUw@vBa@t@g@p@w@h@o@V[LyAr@gFhCk@Ho@Lc@Le@NkAl@kAx@kAjAi@r@_A~Ay@rB_@dAqEfLg@dAg@t@QRUPm@LkALmADmIFcCD}CHaD?uJDqC@gRLoCBgD@yh@l@uC@{CJuh@FaD@mDDgRRyTTqCBcBB{Zb@qCDqHNcA@sCCqC@uDAyd@PuCNcC@uh@g@aCDaDGyg@}@sCEwCIah@k@mCOeDIqg@q@gCEiDAyg@u@iCCmESaCWkAOiAWoA]{Ak@uRmLcEeCeEmCeTeNcK{GeBkA{BwAu_@mVgBkAwBmAoYwQ_EgCwBsAoBqA_`@aWoAy@iCeBaZwRuDcCaC_B}AcAu_@yVeBkAyBwAgLmHgSoMwDcC{DkCe`@uWcBkAaC}AmPwKsGgEkE{CqBsAuBuAq_@sVkBmAuBuAaXeQ}EaDsBuA}B{Am_@uVaBgAeCaBs_@wVaBiA}B{AoLaImR_M}DgC`BmF`cAw`DdBsFnBiGvOqf@jWmy@jO{e@rIyWjBiFfDwCZ}@hCuJlAsEjAsEfCqOjAsJ@{ErAqI",
+   "weight": 680.2,
+   "duration": 680.2,
+   "distance": 6565.8
+  }
+ ],
+ "waypoints": [
+  {
+   "hint": "WVUdgP___39OAAAAKwEAAA8AAAAhAAAApW6LQnM9RUMohk9BJgTnQU4AAAArAQAADwAAACEAAAC3fwAAmhCX-2fEbQJcEZf7cMVtAgIArxIAAAAA",
+   "location": [
+    -73.985894,
+    40.748135
+   ],
+   "name": "West 33rd Street",
+   "distance": 33.68424077
+  },
+  {
+   "hint": "3iXDhE2cbY0RAAAAAAAAAAAAAAAxAQAAbClwQQAAAAAAAAAAkoSIQxEAAAAAAAAAAAAAADEBAAC3fwAAFFaX-whUbgKAVpf7zFRuAgAAzwYAAAAA",
+   "location": [
+    -73.968108,
+    40.784904
+   ],
+   "name": "86th Street Transverse",
+   "distance": 23.5981743
+  }
+ ]
+}

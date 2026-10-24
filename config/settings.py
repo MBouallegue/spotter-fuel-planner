@@ -81,6 +81,14 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        "OPTIONS": {
+            # WAL lets reads run during a write, and synchronous=NORMAL drops the fsync on
+            # every commit (about 100 ms on Windows). A power cut can lose the last writes
+            # but never corrupts the file: fine for cached routes and saved plans.
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL",
+            # Take the write lock at BEGIN, so concurrent writers wait instead of failing.
+            "transaction_mode": "IMMEDIATE",
+        },
     }
 }
 
@@ -106,6 +114,21 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    # Every error leaves as {"error": {"code", "message", "details"}}.
+    "EXCEPTION_HANDLER": "planner.api.errors.exception_handler",
+}
+
+# Geocoding answers for free-text locations live here. The in-process cache needs no
+# setup; with several worker processes, point it at Redis instead.
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
+    # Every outbound call is logged here with the service, HTTP status and duration.
+    "loggers": {"planner": {"handlers": ["console"], "level": os.environ.get("LOG_LEVEL", "INFO")}},
 }
 
 
@@ -119,3 +142,13 @@ NOMINATIM_BASE_URL = os.environ.get(
     "NOMINATIM_BASE_URL", "https://nominatim.openstreetmap.org"
 ).rstrip("/")
 NOMINATIM_TIMEOUT_SECONDS = float(os.environ.get("NOMINATIM_TIMEOUT_SECONDS", "5"))
+
+# --- Routing ------------------------------------------------------------------------
+# Tried in this order. A provider that fails hands over to the next; nothing is retried.
+ROUTING_PROVIDERS = env_list("ROUTING_PROVIDERS", "osrm")
+OSRM_BASE_URL = os.environ.get("OSRM_BASE_URL", "https://router.project-osrm.org").rstrip("/")
+# (connect, read) seconds for every routing call, so a stuck provider cannot hang a request.
+ROUTING_TIMEOUT_SECONDS = (
+    float(os.environ.get("ROUTING_CONNECT_TIMEOUT_SECONDS", "3")),
+    float(os.environ.get("ROUTING_READ_TIMEOUT_SECONDS", "15")),
+)
