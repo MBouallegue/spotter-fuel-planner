@@ -107,3 +107,15 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
 }
+
+
+# --- Outbound HTTP ------------------------------------------------------------------
+# The public OSM services (Nominatim, OSRM) ask every client to identify itself.
+HTTP_USER_AGENT = os.environ.get(
+    "HTTP_USER_AGENT",
+    "spotter-fuel-planner/1.0 (+https://github.com/MBouallegue/spotter-fuel-planner)",
+)
+NOMINATIM_BASE_URL = os.environ.get(
+    "NOMINATIM_BASE_URL", "https://nominatim.openstreetmap.org"
+).rstrip("/")
+NOMINATIM_TIMEOUT_SECONDS = float(os.environ.get("NOMINATIM_TIMEOUT_SECONDS", "5"))

@@ -1,0 +1,8 @@
+ID,STATE_CODE,STATE_NAME,CITY,COUNTY,LATITUDE,LONGITUDE
+1,WI,Wisconsin,Tomah,Monroe,43.981350,-90.504021
+2,TX,Texas,Twin Forks,Alpha,31.000000,-97.000000
+3,TX,Texas,Twin Forks,Beta,31.100000,-97.000000
+4,TX,Texas,Far Junction,Alpha,30.000000,-97.000000
+5,TX,Texas,Far Junction,Beta,32.000000,-97.000000
+6,FL,Florida,Orlando,Brevard,28.498821,-80.582480
+7,FL,Florida,Orlando,Orange,28.539882,-81.372668

@@ -1,0 +1,5 @@
+* text=auto
+
+# Source data stays byte-for-byte as published (both files use CRLF line endings).
+data/raw/*.csv -text
+data/geo/us_cities.csv -text
