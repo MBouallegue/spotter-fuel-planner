@@ -81,6 +81,11 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        # Reuse a connection across requests: opening one costs SQLite file work on every
+        # request (50-300 ms on Windows). It only helps a server whose threads live on, such
+        # as `runserver --nothreading`; plain runserver starts a thread per request.
+        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "600")),
+        "CONN_HEALTH_CHECKS": True,
         "OPTIONS": {
             # WAL lets reads run during a write, and synchronous=NORMAL drops the fsync on
             # every commit (about 100 ms on Windows). A power cut can lose the last writes
