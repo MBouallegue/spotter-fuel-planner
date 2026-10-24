@@ -5,18 +5,19 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from planner.api.serializers import TripPlanRequestSerializer
-from planner.models import FuelStation
+from planner.services.station_index import get_station_index
 from planner.services.trip_planner import plan_trip
 
 
 class HealthView(APIView):
-    """A cheap liveness check that also shows whether the station import has run."""
+    """Liveness, plus the number of stations the planner will use.
+
+    The count comes from the in-memory station index, which the first call builds: one
+    health check warms a freshly started server before a demo.
+    """
 
     def get(self, request: Request) -> Response:
-        stations = FuelStation.objects.exclude(
-            geocode_source=FuelStation.GeocodeSource.UNRESOLVED
-        ).count()
-        return Response({"status": "ok", "stations": stations})
+        return Response({"status": "ok", "stations": len(get_station_index().ids)})
 
 
 class TripPlanView(APIView):

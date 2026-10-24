@@ -268,6 +268,16 @@ def test_unknown_place_is_422(client, http):
     assert error_of(response)["code"] == "location_not_found"
 
 
+def test_geocoder_down_is_503_with_retry_after(client, http):
+    http.get("https://nominatim.example/search", status=503)
+
+    response = post(client, {**TRIP, "finish": "1 Main Street, Little Rock"})
+
+    assert response.status_code == 503
+    assert int(response["Retry-After"]) > 0
+    assert error_of(response)["code"] == "geocoding_unavailable"
+
+
 def test_place_outside_the_usa_is_422(client):
     response = post(client, {**TRIP, "finish": {"lat": 48.8566, "lon": 2.3522}})
 

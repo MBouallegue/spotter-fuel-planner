@@ -67,6 +67,8 @@ class LocationOutsideUSA(Exception):
 class GeocodingUnavailable(Exception):
     """Nominatim did not answer, so a free-text location cannot be resolved right now."""
 
+    retry_after_seconds = 60  # a public server's hiccup usually passes within a minute
+
 
 def resolve_location(value: LocationInput) -> ResolvedLocation:
     """Resolve one start/finish input, or raise LocationNotFound, LocationOutsideUSA or

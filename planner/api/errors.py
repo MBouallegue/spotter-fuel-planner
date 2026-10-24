@@ -35,9 +35,9 @@ def exception_handler(exc: Exception, context: dict) -> Response | None:
     """DRF's EXCEPTION_HANDLER: domain errors first, then DRF's own exceptions, reshaped."""
     for error_type, (status, code) in DOMAIN_ERRORS.items():
         if isinstance(exc, error_type):
-            headers = None
-            if isinstance(exc, RoutingUnavailable):
-                headers = {"Retry-After": str(exc.retry_after_seconds)}
+            # The 503s say when to come back.
+            retry_after = getattr(exc, "retry_after_seconds", None)
+            headers = {"Retry-After": str(retry_after)} if retry_after else None
             return Response(
                 error_body(code, str(exc), getattr(exc, "details", None)),
                 status=status,
