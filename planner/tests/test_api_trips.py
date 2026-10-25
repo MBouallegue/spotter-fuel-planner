@@ -11,6 +11,7 @@ import numpy as np
 import polyline
 import pytest
 import responses
+from rest_framework.throttling import AnonRateThrottle
 
 from planner.models import METERS_PER_MILE, FuelStation, Place
 
@@ -18,6 +19,7 @@ pytestmark = pytest.mark.django_db
 
 URL = "/api/v1/trips/plan/"
 OSRM = "https://osrm.example"
+ORS = "https://ors.example"
 ROUTE_URL = f"{OSRM}/route/v1/driving/-101.000000,35.000000;-91.000000,35.000000"
 TRIP = {"start": "Start Town, TX", "finish": "Finish Town, AR"}
 
@@ -65,7 +67,11 @@ def station(opis_id: int, name: str, lat: float, lon: float, price: str) -> Fuel
 
 @pytest.fixture(autouse=True)
 def world(db, settings):
+    settings.ROUTING_PROVIDERS = ["osrm", "ors"]
     settings.OSRM_BASE_URL = OSRM
+    settings.OSRM_MIN_INTERVAL_SECONDS = 0
+    settings.ORS_BASE_URL = ORS
+    settings.ORS_API_KEY = ""  # off unless a test turns it on
     settings.NOMINATIM_BASE_URL = "https://nominatim.example"
     Place.objects.bulk_create(
         [town("Start Town", "TX", 35.0, -101.0), town("Finish Town", "AR", 35.0, -91.0)]
@@ -304,6 +310,50 @@ def test_routing_down_is_503_with_retry_after(client, http):
     error = error_of(response)
     assert error["code"] == "routing_unavailable"
     assert error["details"] == {"failures": ["osrm: HTTP 502, body is not JSON"]}
+
+
+def test_with_osrm_down_ors_answers_and_the_trip_still_plans(client, http, settings):
+    settings.ORS_API_KEY = "test-key"
+    http.get(ROUTE_URL, status=502, body="<html>Bad Gateway</html>")
+    points = polyline.decode(road()["routes"][0]["geometry"], 6)
+    http.post(
+        f"{ORS}/v2/directions/driving-car/geojson",
+        json={
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "summary": {"distance": 600 * METERS_PER_MILE, "duration": 36000}
+                    },
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[lon, lat] for lat, lon in points],
+                    },
+                }
+            ],
+        },
+    )
+
+    body = post(client, TRIP).json()
+
+    assert body["route"]["provider"] == "ors"
+    assert body["meta"]["external_calls"]["routing"] == 2
+    assert body["summary"]["total_fuel_cost"] == 31.0
+
+
+def test_too_many_requests_is_429_with_retry_after(client, monkeypatch):
+    # DRF reads the rates once at import, so the test lowers them on the class itself.
+    monkeypatch.setattr(AnonRateThrottle, "THROTTLE_RATES", {"anon": "2/min"})
+
+    statuses = [client.get("/api/v1/health/").status_code for _ in range(3)]
+
+    assert statuses == [200, 200, 429]
+    response = client.get("/api/v1/health/")
+    assert int(response["Retry-After"]) > 0
+    error = error_of(response)
+    assert error["code"] == "throttled"
+    assert error["details"]["retry_after_seconds"] > 0
 
 
 def test_other_http_errors_keep_the_same_shape(client):

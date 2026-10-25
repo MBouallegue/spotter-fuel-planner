@@ -5,19 +5,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from planner.api.serializers import TripPlanRequestSerializer
+from planner.services.routing.service import provider_states
 from planner.services.station_index import get_station_index
 from planner.services.trip_planner import plan_trip
 
 
 class HealthView(APIView):
-    """Liveness, plus the number of stations the planner will use.
+    """Liveness, the number of stations the planner will use, and each routing provider's
+    circuit-breaker state ("closed", "open", "half_open" or "disabled").
 
     The count comes from the in-memory station index, which the first call builds: one
     health check warms a freshly started server before a demo.
     """
 
     def get(self, request: Request) -> Response:
-        return Response({"status": "ok", "stations": len(get_station_index().ids)})
+        return Response(
+            {
+                "status": "ok",
+                "stations": len(get_station_index().ids),
+                "providers": provider_states(),
+            }
+        )
 
 
 class TripPlanView(APIView):

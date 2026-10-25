@@ -4,6 +4,8 @@ Services raise plain domain exceptions and never import from the API layer. This
 gives each one an HTTP status and a stable code that clients can branch on.
 """
 
+import math
+
 from rest_framework import exceptions
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
@@ -53,7 +55,8 @@ def exception_handler(exc: Exception, context: dict) -> Response | None:
     elif isinstance(exc, exceptions.ParseError):
         response.data = error_body("invalid_request", str(exc.detail))
     elif isinstance(exc, exceptions.Throttled):
-        response.data = error_body("throttled", str(exc.detail), {"retry_after_seconds": exc.wait})
+        wait = math.ceil(exc.wait) if exc.wait is not None else None
+        response.data = error_body("throttled", str(exc.detail), {"retry_after_seconds": wait})
     else:
         # NotFound, MethodNotAllowed, UnsupportedMediaType...: keep DRF's code and message.
         detail = response.data.get("detail", "")

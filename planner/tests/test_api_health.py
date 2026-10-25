@@ -7,11 +7,18 @@ from planner.services.station_index import get_station_index
 
 
 @pytest.mark.django_db
-def test_health_reports_status_and_station_count(client):
+def test_health_reports_stations_and_provider_states(client, settings):
+    settings.ROUTING_PROVIDERS = ["osrm", "ors"]
+    settings.ORS_API_KEY = ""
+
     response = client.get("/api/v1/health/")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "stations": 0}
+    assert response.json() == {
+        "status": "ok",
+        "stations": 0,
+        "providers": {"osrm": "closed", "ors": "disabled"},
+    }
 
 
 @pytest.mark.django_db

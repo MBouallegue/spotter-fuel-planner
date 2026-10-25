@@ -121,10 +121,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     # Every error leaves as {"error": {"code", "message", "details"}}.
     "EXCEPTION_HANDLER": "planner.api.errors.exception_handler",
+    # Per client IP; a client over the limit gets 429 with Retry-After.
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {"anon": os.environ.get("API_THROTTLE_RATE", "60/min")},
 }
 
-# Geocoding answers for free-text locations live here. The in-process cache needs no
-# setup; with several worker processes, point it at Redis instead.
+# Geocoding answers, circuit-breaker state and both throttles live here. The in-process
+# cache needs no setup; with several worker processes, point it at Redis instead.
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
 LOGGING = {
@@ -150,10 +153,22 @@ NOMINATIM_TIMEOUT_SECONDS = float(os.environ.get("NOMINATIM_TIMEOUT_SECONDS", "5
 
 # --- Routing ------------------------------------------------------------------------
 # Tried in this order. A provider that fails hands over to the next; nothing is retried.
-ROUTING_PROVIDERS = env_list("ROUTING_PROVIDERS", "osrm")
-OSRM_BASE_URL = os.environ.get("OSRM_BASE_URL", "https://router.project-osrm.org").rstrip("/")
+ROUTING_PROVIDERS = env_list("ROUTING_PROVIDERS", "osrm,ors")
 # (connect, read) seconds for every routing call, so a stuck provider cannot hang a request.
 ROUTING_TIMEOUT_SECONDS = (
     float(os.environ.get("ROUTING_CONNECT_TIMEOUT_SECONDS", "3")),
     float(os.environ.get("ROUTING_READ_TIMEOUT_SECONDS", "15")),
 )
+# After this many failures in a row a provider is skipped for BREAKER_RESET_SECONDS.
+BREAKER_FAILURE_THRESHOLD = int(os.environ.get("BREAKER_FAILURE_THRESHOLD", "3"))
+BREAKER_RESET_SECONDS = int(os.environ.get("BREAKER_RESET_SECONDS", "60"))
+
+OSRM_BASE_URL = os.environ.get("OSRM_BASE_URL", "https://router.project-osrm.org").rstrip("/")
+# The public server's policy: at most one request per second.
+OSRM_MIN_INTERVAL_SECONDS = float(os.environ.get("OSRM_MIN_INTERVAL_SECONDS", "1.0"))
+
+# openrouteservice is the fallback, and only runs when a (free) key is set.
+ORS_API_KEY = os.environ.get("ORS_API_KEY", "")
+ORS_BASE_URL = os.environ.get("ORS_BASE_URL", "https://api.openrouteservice.org").rstrip("/")
+# "driving-hgv" routes as a heavy goods vehicle instead of a car.
+ORS_PROFILE = os.environ.get("ORS_PROFILE", "driving-car")

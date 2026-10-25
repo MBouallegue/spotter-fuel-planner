@@ -33,7 +33,21 @@ class NoRouteError(Exception):
 
 
 class ProviderError(Exception):
-    """The provider failed (network error, timeout, 5xx, 429, malformed body): try the next."""
+    """The provider gave no route, so the service tries the next one.
+
+    ``unhealthy`` is True when the provider itself is in trouble (network error, timeout,
+    5xx, 429, malformed body), which counts against its circuit breaker. It is False when
+    the provider answered properly but refused this request, such as ORS's 6,000 km limit.
+    """
+
+    def __init__(self, message: str, unhealthy: bool = True):
+        super().__init__(message)
+        self.unhealthy = unhealthy
+
+
+def is_provider_trouble(status: int) -> bool:
+    """5xx and 429 mean the provider is struggling; other 4xx refuse this one request."""
+    return status >= 500 or status == 429
 
 
 class RoutingUnavailable(Exception):
