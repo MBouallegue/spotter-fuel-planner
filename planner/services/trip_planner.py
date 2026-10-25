@@ -1,18 +1,21 @@
-"""Plan a trip end to end and shape the response body.
+"""Plan a trip end to end, shape the response body and save it.
 
 resolve start and finish -> route (cached) -> resample the line every 0.5 mi -> stations
-within the corridor -> cheapest purchases -> stops, totals, a GeoJSON map and timings.
+within the corridor -> cheapest purchases -> stops, totals, a GeoJSON map and timings ->
+saved as a TripPlan, which the map page reads.
 """
 
 import functools
 import time
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from urllib.parse import urljoin
 
 import numpy as np
 import polyline
+from django.urls import reverse
 
-from planner.models import METERS_PER_MILE, RouteCache
+from planner.models import METERS_PER_MILE, RouteCache, TripPlan
 from planner.services.geometry import RouteLine, haversine_miles, resample_line, simplify_line
 from planner.services.locations import LocationInput, ResolvedLocation, resolve_location
 from planner.services.matching import CorridorMatch, stations_along_route
@@ -87,6 +90,7 @@ def plan_trip(
     start: LocationInput,
     finish: LocationInput,
     *,
+    base_url: str,
     max_range_miles: float = 500.0,
     mpg: float = 10.0,
     start_fuel_gallons: float | None = None,
@@ -94,8 +98,10 @@ def plan_trip(
 ) -> dict:
     """Plan the cheapest fuel stops between two US locations and return the response body.
 
-    ``start_fuel_gallons=None`` means the tank starts full. Raises the domain errors that
-    api/errors.py turns into HTTP responses.
+    The body is saved as a TripPlan, so its map page and GET /trips/<id>/ can show it later
+    without planning again; ``base_url`` (the request's scheme and host) makes map_url
+    absolute. ``start_fuel_gallons=None`` means the tank starts full. Raises the domain
+    errors that api/errors.py turns into HTTP responses.
     """
     started = time.perf_counter()
     origin = resolve_location(start)
@@ -124,7 +130,20 @@ def plan_trip(
     stops = [FuelStop.priced(p, index.info[p.candidate.station_id]) for p in purchases]
     route_json = _route_json(route)
     fuel_stops = _fuel_stops_json(stops, matches)
+    plan = TripPlan(
+        route=route,
+        start_query=_query_text(start),
+        finish_query=_query_text(finish),
+        params={
+            "max_range_miles": max_range_miles,
+            "mpg": mpg,
+            "start_fuel_gallons": start_fuel_gallons,
+            "corridor_miles": corridor_miles,
+        },
+    )
     body = {
+        "id": str(plan.id),
+        "map_url": urljoin(base_url, reverse("api:trip-map", args=[plan.id])),
         "start": _location_json(origin),
         "finish": _location_json(destination),
         "route": route_json,
@@ -154,7 +173,14 @@ def plan_trip(
             "planning": _ms(routed, planned),
         },
     }
+    plan.result = body
+    plan.save()
     return body
+
+
+def _query_text(value: LocationInput) -> str:
+    """The client's input as text, for TripPlan's query columns."""
+    return value if isinstance(value, str) else f"{value['lat']},{value['lon']}"
 
 
 def _infeasible(exc: NoFeasiblePlan, line: RouteLine) -> TripInfeasible:

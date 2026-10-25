@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fuel plan: {{ plan.start.label }} to {{ plan.finish.label }}</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f2937; }
+    #map { position: absolute; inset: 0; }
+    .panel {
+      position: absolute; z-index: 1000; top: 12px; right: 12px; width: 300px;
+      max-width: calc(100% - 24px); max-height: calc(100% - 24px); box-sizing: border-box;
+      overflow: auto; padding: 12px 14px; background: #fff; border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+    }
+    .panel h1 { margin: 0 0 8px; font-size: 15px; }
+    .figures { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+    .figures dt { color: #6b7280; }
+    .figures dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+    .stops { margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid #e5e7eb; }
+    .stops li { display: flex; gap: 8px; align-items: center; padding: 5px 0; cursor: pointer; }
+    .stops li:hover { background: #f9fafb; }
+    .badge {
+      display: grid; place-items: center; flex: none; width: 22px; height: 22px;
+      border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #c2410c;
+      background: #ea580c; color: #fff; font-size: 12px; font-weight: 700;
+    }
+    .note { margin: 8px 0 0; color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <aside class="panel" id="panel">
+    <h1 id="title"></h1>
+    <dl class="figures" id="figures"></dl>
+    <ol class="stops" id="stops"></ol>
+    <p class="note" id="note"></p>
+  </aside>
+
+  {{ plan|json_script:"plan-data" }}
+  <script>
+    // Everything comes from the plan embedded above: this page calls no backend API.
+    const plan = JSON.parse(document.getElementById("plan-data").textContent);
+
+    // Text goes in through textContent, never as HTML: labels can come from a geocoder.
+    function el(tag, text, className) {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    }
+    const money = (amount) => "$" + amount.toFixed(2);
+    const badge = (sequence) => el("div", String(sequence), "badge");
+
+    // Layers need a view before they are drawn: start over the US, then fit the route below.
+    const map = L.map("map").setView([39.8, -98.6], 4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      // OSM's tile policy requires a Referer; Django's default policy (same-origin) drops it.
+      referrerPolicy: "strict-origin-when-cross-origin",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+    map.attributionControl.addAttribution(
+      plan.route.provider === "ors" ? "Route: openrouteservice" : "Route: OSRM"
+    );
+
+    function stopPopup(stop) {
+      const box = el("div");
+      box.append(
+        el("strong", `${stop.sequence}. ${stop.name}`),
+        el("div", `${stop.city}, ${stop.state}`),
+        el("div", `${stop.gallons.toFixed(3)} gal at $${stop.price_per_gallon.toFixed(3)} = ${money(stop.cost)}`),
+        el("div", `Mile ${stop.mile_marker.toFixed(1)}, ${stop.distance_from_route_miles.toFixed(1)} mi off the route`)
+      );
+      return box;
+    }
+
+    // The response's GeoJSON draws the map: one feature per route, start, finish and stop.
+    let routeLayer;
+    const stopMarkers = new Map();
+    for (const feature of plan.map.features) {
+      const props = feature.properties;
+      if (props.kind === "route") {
+        routeLayer = L.geoJSON(feature, { style: { color: "#2563eb", weight: 4, opacity: 0.85 } }).addTo(map);
+        continue;
+      }
+      const [lon, lat] = feature.geometry.coordinates;  // GeoJSON order
+      if (props.kind === "fuel_stop") {
+        const icon = L.divIcon({ className: "", html: badge(props.sequence), iconSize: [26, 26], iconAnchor: [13, 13] });
+        stopMarkers.set(props.sequence, L.marker([lat, lon], { icon }).bindPopup(stopPopup(props)).addTo(map));
+      } else {
+        const isStart = props.kind === "start";
+        L.circleMarker([lat, lon], {
+          radius: 8, color: "#fff", weight: 2, fillOpacity: 1,
+          fillColor: isStart ? "#16a34a" : "#dc2626",
+        }).bindTooltip(el("span", `${isStart ? "Start" : "Finish"}: ${props.label}`)).addTo(map);
+      }
+    }
+
+    document.getElementById("title").textContent = `${plan.start.label} to ${plan.finish.label}`;
+    const summary = plan.summary;
+    const figures = [
+      ["Distance", `${plan.route.distance_miles.toLocaleString("en-US")} mi`],
+      ["Driving time", `${plan.route.duration_hours.toFixed(1)} h`],
+      ["Fuel stops", String(summary.stops)],
+      ["Fuel bought", `${summary.fuel_purchased_gallons.toFixed(1)} gal`],
+      ["Total fuel cost", money(summary.total_fuel_cost)],
+      ["Router", plan.route.provider.toUpperCase()],
+    ];
+    for (const [label, value] of figures) {
+      document.getElementById("figures").append(el("dt", label), el("dd", value));
+    }
+    for (const stop of plan.fuel_stops) {
+      const row = el("li");
+      row.append(badge(stop.sequence), el("span", `${stop.city}, ${stop.state}: ${stop.gallons.toFixed(1)} gal, ${money(stop.cost)}`));
+      row.addEventListener("click", () => {
+        const marker = stopMarkers.get(stop.sequence);
+        map.setView(marker.getLatLng(), Math.max(map.getZoom(), 9));
+        marker.openPopup();
+      });
+      document.getElementById("stops").append(row);
+    }
+    document.getElementById("note").textContent = summary.note;
+
+    // Keep the route clear of the panel on the right, unless the screen is too narrow.
+    const panelWidth = document.getElementById("panel").offsetWidth;
+    const rightPad = panelWidth < window.innerWidth / 2 ? panelWidth + 36 : 24;
+    map.fitBounds(routeLayer.getBounds(), { paddingTopLeft: [24, 24], paddingBottomRight: [rightPad, 24] });
+  </script>
+</body>
+</html>

@@ -13,7 +13,7 @@ import pytest
 import responses
 from rest_framework.throttling import AnonRateThrottle
 
-from planner.models import METERS_PER_MILE, FuelStation, Place
+from planner.models import METERS_PER_MILE, FuelStation, Place, RouteCache, TripPlan
 
 pytestmark = pytest.mark.django_db
 
@@ -152,6 +152,59 @@ def test_plans_the_cheapest_stops_and_reports_everything(client, http):
     assert body["meta"]["route_cache"] == "miss"
     assert body["meta"]["candidate_stations"] == 3
     assert set(body["meta"]["timing_ms"]) == {"total", "geocoding", "routing", "planning"}
+
+
+def test_the_plan_is_saved_and_can_be_fetched_again(client, http):
+    http.get(ROUTE_URL, json=road())
+
+    body = post(client, TRIP).json()
+
+    plan = TripPlan.objects.get(pk=body["id"])
+    assert body["map_url"] == f"http://testserver/api/v1/trips/{body['id']}/map/"
+    assert plan.result == body
+    assert (plan.start_query, plan.finish_query) == ("Start Town, TX", "Finish Town, AR")
+    assert plan.params == {
+        "max_range_miles": 500.0,
+        "mpg": 10.0,
+        "start_fuel_gallons": None,
+        "corridor_miles": 5.0,
+    }
+    assert plan.route == RouteCache.objects.get()
+
+    again = client.get(f"/api/v1/trips/{body['id']}/")
+    assert (again.status_code, again.json()) == (200, body)
+    assert len(http.calls) == 1  # fetching a saved plan plans nothing
+
+
+def test_an_unknown_plan_is_404(client):
+    response = client.get("/api/v1/trips/00000000-0000-0000-0000-000000000000/")
+
+    assert response.status_code == 404
+    assert error_of(response)["code"] == "not_found"
+
+
+def test_the_map_page_embeds_the_saved_plan(client, http):
+    http.get(ROUTE_URL, json=road())
+    body = post(client, {**TRIP, "finish": {"lat": 35.0, "lon": -91.0}}).json()
+
+    page = client.get(body["map_url"])
+
+    assert page.status_code == 200
+    assert page["Content-Type"].startswith("text/html")
+    html = page.content.decode()
+    # Django's json_script embeds the plan as JSON the page script reads back.
+    assert '<script id="plan-data" type="application/json">' in html
+    assert '"name": "CHEAP"' in html
+    assert "leaflet@1.9.4" in html and 'integrity="sha256-' in html
+    # Without a Referer, OSM's tile servers answer 403 "Access blocked".
+    assert 'referrerPolicy: "strict-origin-when-cross-origin"' in html
+    assert TripPlan.objects.get().finish_query == "35.0,-91.0"
+
+
+def test_the_map_of_an_unknown_plan_is_404(client):
+    response = client.get("/api/v1/trips/00000000-0000-0000-0000-000000000000/map/")
+
+    assert response.status_code == 404
 
 
 def test_map_is_geojson_with_lon_lat_positions(client, http):
