@@ -1,0 +1,368 @@
+{
+  "info": {
+    "name": "Spotter fuel planner",
+    "description": "Start the server first (see the README), then run the requests in order. Request 1 saves the plan id that requests 9 and 10 use.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "plan_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health (warms the server)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"stations are loaded\", () => pm.expect(pm.response.json().stations).to.be.above(0));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/health/",
+        "description": "Status, station count and each routing provider's circuit-breaker state. The first call loads the 6,738 stations into memory, so call it once before a demo."
+      }
+    },
+    {
+      "name": "1. New York -> Los Angeles",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"at least 5 fuel stops\", () => pm.expect(body.fuel_stops.length).to.be.at.least(5));",
+              "pm.test(\"no leg longer than the range\", () => {",
+              "  const range = body.vehicle.max_range_miles;",
+              "  body.fuel_stops.forEach(s => pm.expect(s.miles_from_previous).to.be.at.most(range));",
+              "  pm.expect(body.summary.last_leg_miles).to.be.at.most(range);",
+              "});",
+              "pm.test(\"total = the sum of the stop costs\", () => {",
+              "  const cents = body.fuel_stops.reduce((sum, s) => sum + Math.round(s.cost * 100), 0);",
+              "  pm.expect(Math.round(body.summary.total_fuel_cost * 100)).to.eql(cents);",
+              "});",
+              "pm.collectionVariables.set(\"plan_id\", body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "2,800.6 mi, 14 stops, $703.82. On an empty route cache this makes 1 OSRM call (meta.external_calls.routing = 1, about 1.4 s). Saves the plan id for requests 9 and 10."
+      }
+    },
+    {
+      "name": "2. The same trip again (served from the cache)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"route cache hit\", () => pm.expect(body.meta.route_cache).to.eql(\"hit\"));",
+              "pm.test(\"no routing call\", () => pm.expect(body.meta.external_calls.routing).to.eql(0));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "The route comes from the RouteCache table: no external call, a few milliseconds."
+      }
+    },
+    {
+      "name": "3. Dallas -> Houston (no stop: the tank starts full)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"no fuel stop\", () => pm.expect(body.summary.stops).to.eql(0));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Houston, TX\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "256 mi on a full 50-gallon tank (500 mi of range): no purchase, total $0."
+      }
+    },
+    {
+      "name": "4. Seattle -> Miami (a long trip)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"many fuel stops\", () => pm.expect(body.summary.stops).to.be.at.least(10));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Seattle, WA\",\n  \"finish\": \"Miami, FL\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "3,301 mi coast to coast: 19 stops, $848.64."
+      }
+    },
+    {
+      "name": "5. San Francisco -> Seattle (infeasible: 422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"no_feasible_plan\", () => pm.expect(body.error.code).to.eql(\"no_feasible_plan\"));",
+              "pm.test(\"the gap is longer than the range\", () => pm.expect(body.error.details.gap_miles).to.be.above(500));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"San Francisco, CA\",\n  \"finish\": \"Seattle, WA\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "The price file has no station on I-5 between the Bay Area and Halsey, OR, 549.9 mi away: more than one tank. A clean 422 says where the truck gets stuck."
+      }
+    },
+    {
+      "name": "6. Dallas -> Houston with 5 gallons in the tank",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"one fuel stop\", () => pm.expect(body.summary.stops).to.eql(1));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"Dallas, TX\",\n  \"finish\": \"Houston, TX\",\n  \"start_fuel_gallons\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "5 gallons reach 50 mi: one stop at Wilmer, TX (mile 24.4), buying 20.6 gal for $56.81."
+      }
+    },
+    {
+      "name": "7. Invalid input (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test(\"400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"invalid_request\", () => pm.expect(body.error.code).to.eql(\"invalid_request\"));",
+              "pm.test(\"field errors\", () => pm.expect(body.error.details).to.have.keys(\"mpg\", \"corridor_miles\"));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"start\": \"New York, NY\",\n  \"finish\": \"Los Angeles, CA\",\n  \"mpg\": 0,\n  \"corridor_miles\": 40\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/trips/plan/",
+        "description": "mpg must be 1 to 100 and corridor_miles 0.5 to 25: a 400 with one error per field."
+      }
+    },
+    {
+      "name": "8. GET alias: Chicago -> Denver",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"a plan\", () => pm.expect(pm.response.json().summary).to.have.property(\"total_fuel_cost\"));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/trips/plan/?start=Chicago, IL&finish=Denver, CO",
+        "description": "The same planning with query parameters, so it works from a browser's address bar."
+      }
+    },
+    {
+      "name": "9. The saved plan (from request 1)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"same plan\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"plan_id\")));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/trips/{{plan_id}}/",
+        "description": "The plan exactly as request 1 returned it, read from the TripPlan table: nothing is planned again."
+      }
+    },
+    {
+      "name": "10. The map page (open it in a browser)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"an HTML page\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/trips/{{plan_id}}/map/",
+        "description": "A Leaflet page for the plan of request 1: route, start, finish and numbered stops. Open the map_url from request 1 in a browser to see it."
+      }
+    }
+  ]
+}
